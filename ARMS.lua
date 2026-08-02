@@ -1,6 +1,6 @@
 -- ============================================================
 -- ARMS - Adaptive Recovery Management System
--- FlyWithLua для X-Plane 12 (v8.4 - финальный рабочий)
+-- FlyWithLua для X-Plane 12 (v8.5 - проверенные DataRef'ы)
 -- ============================================================
 
 function clamp(v, mn, mx)
@@ -42,7 +42,7 @@ local RISK_ACTIVE = 50.0
 local RISK_EMERGENCY = 80.0
 
 -- ============================================================
--- 2. ПОЛУЧАЕМ DATAREF'Ы
+-- 2. DATAREF'Ы (ПРАВИЛЬНЫЕ ИМЕНА)
 -- ============================================================
 
 local function get_ref(name)
@@ -58,20 +58,20 @@ local alpha_ref = get_ref("sim/flightmodel/position/alpha")
 local speed_ref = get_ref("sim/flightmodel/position/indicated_airspeed")
 local roll_ref = get_ref("sim/flightmodel/position/phi")
 local yaw_ref = get_ref("sim/flightmodel/position/Q")
-local vvi_ref = get_ref("sim/flightmodel/position/vvi_ftsec")
-local throttle1_ref = get_ref("sim/flightmodel/engine/ENGN_thro_use[0]")
-local throttle2_ref = get_ref("sim/flightmodel/engine/ENGN_thro_use[1]")
+local vvi_ref = get_ref("sim/flightmodel/position/vvi_fpm")
+local throttle1_ref = get_ref("sim/flightmodel/engine/ENGN_throttle_use[0]")
+local throttle2_ref = get_ref("sim/flightmodel/engine/ENGN_throttle_use[1]")
 
 local override_ref = get_ref("sim/operation/override/override_control_surfaces")
-local cmd_elevator_ref = get_ref("sim/flightmodel/controls/elevator")
-local cmd_rudder_ref = get_ref("sim/flightmodel/controls/rudder")
-local cmd_aileron_ref = get_ref("sim/flightmodel/controls/aileron")
-local cmd_throttle1_ref = get_ref("sim/flightmodel/engine/ENGN_thro_use[0]")
-local cmd_throttle2_ref = get_ref("sim/flightmodel/engine/ENGN_thro_use[1]")
+local cmd_elevator_ref = get_ref("sim/flightmodel/controls/elevator_def")
+local cmd_rudder_ref = get_ref("sim/flightmodel/controls/rudder_def")
+local cmd_aileron_ref = get_ref("sim/flightmodel/controls/aileron_def")
+local cmd_throttle1_ref = get_ref("sim/flightmodel/engine/ENGN_throttle_use[0]")
+local cmd_throttle2_ref = get_ref("sim/flightmodel/engine/ENGN_throttle_use[1]")
 local cmd_flap_ref = get_ref("sim/flightmodel/controls/flaprat")
 
 -- ============================================================
--- 3. ФУНКЦИИ ДЛЯ ЧТЕНИЯ/ЗАПИСИ (С ЗАЩИТОЙ ОТ NIL)
+-- 3. ФУНКЦИИ ДЛЯ ЧТЕНИЯ/ЗАПИСИ
 -- ============================================================
 
 local function readf(ref)
@@ -164,5 +164,5 @@ end
 
 do_every_frame("arms_loop()")
 logMsg("========================================")
-logMsg(" ARMS v8.4 LOADED (FlyWithLua)")
+logMsg(" ARMS v8.5 LOADED (FlyWithLua)")
 logMsg("========================================")
