@@ -1,6 +1,6 @@
 -- ============================================================
 -- ARMS - Adaptive Recovery Management System
--- FlyWithLua для X-Plane 12 (v8.5 - проверенные DataRef'ы)
+-- FlyWithLua для X-Plane 12 (v8.6 - финальная проверка)
 -- ============================================================
 
 function clamp(v, mn, mx)
@@ -22,10 +22,6 @@ function calc_risk(value, min_val, max_val)
     return norm * norm * 100.0
 end
 
--- ============================================================
--- 1. ПОРОГИ
--- ============================================================
-
 local ALPHA_MIN = 10.0
 local ALPHA_MAX = 22.0
 local VVI_MIN = -200.0
@@ -41,83 +37,48 @@ local RISK_PREPARE = 20.0
 local RISK_ACTIVE = 50.0
 local RISK_EMERGENCY = 80.0
 
--- ============================================================
--- 2. DATAREF'Ы (ПРАВИЛЬНЫЕ ИМЕНА)
--- ============================================================
+-- DataRef'ы с правильными именами для X-Plane 12
+local alpha = globalPropertyf("sim/flightmodel/position/alpha")
+local speed = globalPropertyf("sim/flightmodel/position/indicated_airspeed")
+local roll = globalPropertyf("sim/flightmodel/position/phi")
+local yaw = globalPropertyf("sim/flightmodel/position/Q")
+local vvi = globalPropertyf("sim/flightmodel/position/vvi_fpm")
+local throttle1 = globalPropertyf("sim/flightmodel/engine/ENGN_throttle_use[0]")
+local throttle2 = globalPropertyf("sim/flightmodel/engine/ENGN_throttle_use[1]")
 
-local function get_ref(name)
-    local ref = XPLMFindDataRef(name)
-    if ref == nil then
-        logMsg("[ARMS] WARNING: DataRef " .. name .. " not found!")
-        return nil
-    end
-    return ref
-end
-
-local alpha_ref = get_ref("sim/flightmodel/position/alpha")
-local speed_ref = get_ref("sim/flightmodel/position/indicated_airspeed")
-local roll_ref = get_ref("sim/flightmodel/position/phi")
-local yaw_ref = get_ref("sim/flightmodel/position/Q")
-local vvi_ref = get_ref("sim/flightmodel/position/vvi_fpm")
-local throttle1_ref = get_ref("sim/flightmodel/engine/ENGN_throttle_use[0]")
-local throttle2_ref = get_ref("sim/flightmodel/engine/ENGN_throttle_use[1]")
-
-local override_ref = get_ref("sim/operation/override/override_control_surfaces")
-local cmd_elevator_ref = get_ref("sim/flightmodel/controls/elevator_def")
-local cmd_rudder_ref = get_ref("sim/flightmodel/controls/rudder_def")
-local cmd_aileron_ref = get_ref("sim/flightmodel/controls/aileron_def")
-local cmd_throttle1_ref = get_ref("sim/flightmodel/engine/ENGN_throttle_use[0]")
-local cmd_throttle2_ref = get_ref("sim/flightmodel/engine/ENGN_throttle_use[1]")
-local cmd_flap_ref = get_ref("sim/flightmodel/controls/flaprat")
-
--- ============================================================
--- 3. ФУНКЦИИ ДЛЯ ЧТЕНИЯ/ЗАПИСИ
--- ============================================================
-
-local function readf(ref)
-    if ref == nil then return 0 end
-    return XPLMGetDataf(ref) or 0
-end
-
-local function writef(ref, val)
-    if ref == nil then return end
-    XPLMSetDataf(ref, val)
-end
-
--- ============================================================
--- 4. ГЛАВНАЯ ЛОГИКА
--- ============================================================
+local override = globalPropertyf("sim/operation/override/override_control_surfaces")
+local cmd_elevator = globalPropertyf("sim/flightmodel/controls/elevator_def")
+local cmd_rudder = globalPropertyf("sim/flightmodel/controls/rudder_def")
+local cmd_aileron = globalPropertyf("sim/flightmodel/controls/aileron_def")
+local cmd_throttle1 = globalPropertyf("sim/flightmodel/engine/ENGN_throttle_use[0]")
+local cmd_throttle2 = globalPropertyf("sim/flightmodel/engine/ENGN_throttle_use[1]")
+local cmd_flap = globalPropertyf("sim/flightmodel/controls/flaprat")
 
 function arms_loop()
-    -- Читаем данные
-    local a = readf(alpha_ref) * 57.2958
-    local spd = readf(speed_ref)
-    local r = readf(roll_ref) * 57.2958
-    local yr = readf(yaw_ref)
-    local vv = readf(vvi_ref)
-    local t1 = readf(throttle1_ref) * 100
-    local t2 = readf(throttle2_ref) * 100
+    local a = (alpha() or 0) * 57.2958
+    local spd = speed() or 0
+    local r = (roll() or 0) * 57.2958
+    local yr = yaw() or 0
+    local vv = vvi() or 0
+    local t1 = (throttle1() or 0) * 100
+    local t2 = (throttle2() or 0) * 100
 
-    -- Расчёт рисков
     local r_alpha = calc_risk(a, ALPHA_MIN, ALPHA_MAX)
     local r_vvi = calc_risk(-vv, 200.0, 800.0)
     local r_yaw = calc_risk(math.abs(yr), YAW_MIN, YAW_MAX)
     local r_roll = calc_risk(math.abs(r), ROLL_MIN, ROLL_MAX)
     local r_thr = calc_risk(math.abs(t1 - t2), THR_ASYMM_MIN, THR_ASYMM_MAX)
 
-    -- Общий риск
     local risk = (r_alpha * 2.0 + r_vvi * 1.5 + r_yaw * 1.5 + r_roll * 1.0 + r_thr * 1.0) / 7.0
     risk = clamp(risk, 0.0, 100.0)
 
-    -- Если риск мал — не вмешиваемся
     if risk < RISK_PREPARE then
-        if readf(override_ref) == 1 then
-            writef(override_ref, 0)
+        if (override() or 0) == 1 then
+            override(0)
         end
         return
     end
 
-    -- Расчёт команд
     local elevator = 0.0
     if r_alpha > 20.0 then
         local factor = (a - ALPHA_MIN) / (ALPHA_MAX - ALPHA_MIN)
@@ -148,21 +109,16 @@ function arms_loop()
         cmd_t2 = t2 / 100.0
     end
 
-    -- Отправка команд
-    writef(override_ref, 1)
-    writef(cmd_elevator_ref, clamp(elevator, -1.0, 1.0))
-    writef(cmd_rudder_ref, clamp(rudder, -1.0, 1.0))
-    writef(cmd_aileron_ref, 0.0)
-    writef(cmd_throttle1_ref, clamp(cmd_t1, 0.0, 1.0))
-    writef(cmd_throttle2_ref, clamp(cmd_t2, 0.0, 1.0))
-    writef(cmd_flap_ref, 0.0)
+    override(1)
+    cmd_elevator(clamp(elevator, -1.0, 1.0))
+    cmd_rudder(clamp(rudder, -1.0, 1.0))
+    cmd_aileron(0.0)
+    cmd_throttle1(clamp(cmd_t1, 0.0, 1.0))
+    cmd_throttle2(clamp(cmd_t2, 0.0, 1.0))
+    cmd_flap(0.0)
 end
-
--- ============================================================
--- 5. РЕГИСТРАЦИЯ
--- ============================================================
 
 do_every_frame("arms_loop()")
 logMsg("========================================")
-logMsg(" ARMS v8.5 LOADED (FlyWithLua)")
+logMsg(" ARMS v8.6 LOADED")
 logMsg("========================================")
